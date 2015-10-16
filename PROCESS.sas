@@ -1,0 +1,217 @@
+
+LIBNAME PRJ '/folders/myfolders/iSAS/project';
+
+
+/* READING THE CSV FILES INTO SAS */
+
+FILENAME CSV "/folders/myfolders/iSAS/project/HarvardX-Course.csv" TERMSTR=CRLF;
+FILENAME CSV2 "/folders/myfolders/iSAS/project/MITx-Course.csv" TERMSTR=CRLF;
+FILENAME CSV3 "/folders/myfolders/iSAS/project/harvard-courses.csv" TERMSTR=CRLF;
+FILENAME CSV4 "/folders/myfolders/iSAS/project/mit-courses.csv" TERMSTR=CRLF;
+
+
+PROC IMPORT DATAFILE=CSV
+		    OUT=PRJ.HARVARD
+		    DBMS=CSV
+		    REPLACE;
+		    guessingrows=32767;
+RUN;
+
+PROC IMPORT DATAFILE=CSV2
+		    OUT=PRJ.MIT
+		    DBMS=CSV
+		    REPLACE;
+		    guessingrows=32767;
+RUN;
+
+PROC IMPORT DATAFILE=CSV3
+		    OUT=PRJ.HARVARD_COURSE
+		    DBMS=CSV
+		    REPLACE;
+		    
+RUN;
+PROC IMPORT DATAFILE=CSV4
+		    OUT=PRJ.MIT_COURSE
+		    DBMS=CSV
+		    REPLACE;
+		    
+RUN;
+
+/* VERIFYING THE NEWLY CREATED DATASETS */
+
+PROC CONTENTS DATA=PRJ.HARVARD;
+PROC CONTENTS DATA=PRJ.MIT;
+RUN;
+
+
+/*COMBINING TWO TABLES AND CREATING A NEW DATASET*/
+
+DATA PRJ.MOOC;
+	SET PRJ.HARVARD PRJ.MIT;
+RUN;
+	
+
+/*SANITY CHECK FOR GENDER*/
+
+PROC FREQ DATA=PRJ.MOOC;
+	TABLE GENDER;
+RUN;
+	
+/* REMOVE NAs AND OTHER MISSING VALUES */
+
+DATA PRJ.MOOC;
+	MODIFY PRJ.MOOC;
+	IF GENDER='o' OR GENDER='NA' OR MISSING(GENDER)
+	OR MISSING(LOE_DI)
+	OR MISSING(YOB) THEN REMOVE;
+RUN;
+
+/* SANITY CHECK FOR COURSE-CODE */
+
+PROC FREQ DATA=PRJ.MOOC;
+	TABLE COURSE_CODE;
+RUN;		
+
+/* SANITY CHECK FOR LEVEL OF EDUCATION */
+
+PROC FREQ DATA=PRJ.MOOC;
+	TABLE LoE_DI;
+RUN;
+
+
+
+	
+/* SANITY CHECK */
+
+PROC FREQ DATA=PRJ.MOOC;
+	TABLE final_cc_cname_DI;
+RUN;	
+
+/* SANITY CHECK YOB */
+PROC FREQ DATA=PRJ.MOOC;
+TABLE YOB;
+RUN;
+
+/* REPLACING THE CONTENTS OF PRJ.MOOC */
+
+DATA PRJ.MOOC;
+	SET TMP;
+RUN;	 	
+
+/* CREATING PERMANENT FORMAT FOR GENDER */
+
+PROC format library=PRJ; 
+	value $GENDER 'm' = 'Male'
+			 'f' = 'Female';
+			 /*
+VALUE $TITLE 
+	"Health in Numbers: Quantitative Methods in Clinical & Public Health Research" =
+	"Health in Numbers"
+	"Human Health and Global Environmental Change" =
+	"Human Health and Environment"
+	"Introduction to Computer Science" = 
+	"Intro to Computer Science"
+	"Introduction to Computer Science and Programming" =
+	"Intro to CS and Prog."
+	"Introduction to Biology - The Secret of Life" =
+	"Intro to Biology"
+	"Introduction to Solid State Chemistry" = 
+	"Intro to Solid State Chemistry" 
+	"The Challenges of Global Poverty" =
+	"Challenges of Global Poverty"
+	"Elements of Structures" =
+	"Elements of Structures"
+	"Circuits and Electronics" =
+	"Circuits and Electronics"
+	"Electricity & Magnetism" = 
+	"Electricity & Magnetism"
+	"Mechanics Review" = 
+	"Mechanics Review"
+	"Justice" = 
+	"Justice"
+	"The Ancient Greek Hero" = 
+	"The Ancient Greek Hero";
+*/
+RUN;
+
+/* SETTING THE LEVELS OF COURSE_STATUS FROM OTHER 4 VARIABLES */
+
+options fmtsearch=(PRJ);
+DATA TMP;
+	LENGTH STATUS $ 13;
+	SET PRJ.MOOC;
+	AGE = 2013 - INPUT(YOB,4.) ;
+	IF CERTIFIED = 1 THEN STATUS = 'CERTIFIED';
+	ELSE IF EXPLORED = 1 THEN STATUS = 'EXPLORED';
+	ELSE IF VIEWED = 1 THEN STATUS = 'VIEWED';
+	ELSE STATUS = 'REGISTERED';
+	FORMAT GENDER $GENDER.;
+RUN;
+
+/* VERIFYING THE NEW VARIABLE STATUS AND OTHERS */
+
+PROC FREQ DATA=TMP;
+	TABLE CERTIFIED EXPLORED VIEWED REGISTERED STATUS GENDER;
+RUN;		
+
+/* REPLACING THE CONTENTS OF PRJ.MOOC */
+
+DATA PRJ.MOOC;
+	SET TMP;
+RUN;	
+
+/* COMBINE THE OTHER TWO TABLES WITH COURSE DESCRIPTION */
+
+DATA PRJ.COURSE_DESC;
+	SET PRJ.HARVARD_COURSE(KEEP=COURSE_CODE FULL_TITLE) 
+	PRJ.MIT_COURSE(KEEP=COURSE_CODE FULL_TITLE);
+RUN;
+
+PROC PRINT DATA=PRJ.COURSE_DESC;
+RUN;	
+
+/* USING LEFT JOIN TO ADD THE COLUMN FULL_TITLE FROM THE COMBINED DATASET 
+TO OUR BASE DATASET PRJ.MOOC */
+
+PROC SQL;
+	CREATE TABLE MERGED AS 
+	SELECT A.*,B.FULL_TITLE 
+	FROM PRJ.MOOC A LEFT JOIN PRJ.COURSE_DESC B
+	ON A.COURSE_CODE = B.COURSE_CODE;
+QUIT;
+
+/* VERIFYING THE MERGE */
+
+PROC FREQ DATA=MERGED; TABLE FULL_TITLE; RUN;
+
+PROC PRINT DATA=MERGED(OBS=200); RUN;
+
+/* REPLACING THE CONTENTS OF PRJ.MOOC */
+	
+DATA PRJ.MOOC;
+	SET MERGED;
+RUN;	
+
+/* REMOVE AGE ANAMOLIES */
+DATA PRJ.MOOC;
+	MODIFY PRJ.MOOC;
+	IF AGE < 10 THEN REMOVE;
+RUN;
+
+/* CREATE UNIQUE STUDENT DATASET */
+
+PROC SORT NODUPKEY DATA=PRJ.MOOC OUT=PRJ.STUDENT;
+	BY USERID_DI;
+RUN;
+
+/* NEW DATASET FOR INDIA */
+DATA PRJ.INDIA;
+	SET PRJ.MOOC;
+	WHERE final_cc_cname_DI = 'India';
+RUN;
+
+PROC CONTENTS DATA=PRJ.INDIA; RUN;	
+	
+	
+
+	
