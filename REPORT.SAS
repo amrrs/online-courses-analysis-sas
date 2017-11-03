@@ -4,17 +4,11 @@ ods powerpoint file="/folders/myfolders/iSAS/project.pptx";
 
 proc odstext;
    p "Imparting Insights from the analysis of Online Course" / style=PresentationTitle;
-   p "Praxis Business School"/ style=PresentationTitle2;
+   p "SAS Project"/ style=PresentationTitle2;
    p ' ';
    p ' ';
    p ' ';
    list;
-    item 'Abdul Majed Raja (A15001)';
-  item 'Abhishek Sengupta(B14003)';
- item 'Gourab Sanyal(B14015)';
- item 'Saurav Sarkar(B14035)';
- item 'Vishal Singh(B14050)';                            
-  item 'Vivek Prashant(B14051)';
    end;
 run;
 
